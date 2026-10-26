@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Gully Foam War</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1 class="sr">Gully Foam War</h1>
+  <div class="stage" id="stage">
+    <div class="hud" id="hud" hidden>
+      <div class="scope" id="scope"></div>
+      <div class="vig" id="vig"></div>
+      <div class="splash" id="splash"></div>
+      <div id="nukewarn"></div>
+      <div id="nukeflash"></div>
+      <div class="pops" id="pops"></div>
+      <div class="tl"><span class="sc" id="score">0</span><span class="cash" id="cash">$0</span><span class="lives" id="lives"></span><span class="wv" id="wave">Wave 1</span><span class="wv fd" id="finds"></span></div>
+      <div class="feed" id="feed"></div>
+      <div class="bossbar" id="bossbar" hidden><span>Scoutmaster Thorne</span><div><i id="bossfill"></i></div></div>
+      <div class="cross" id="cross"><i></i><i></i><i></i><i></i></div>
+      <div class="hit" id="hitm"></div>
+      <div class="combo" id="combo"></div>
+      <div class="dmg" id="dmg"></div>
+      <div class="reload" id="reload">Reloading</div>
+      <div class="banner" id="banner"></div>
+      <div class="bl"><div class="lb">Soak meter <span class="ct" id="crouchtag">Crouched +35% aim</span></div><div class="soak"><div id="soak"></div><i class="sh" id="shield"></i></div><div class="pwr" id="pwr"></div></div>
+      <div class="build" id="build"></div>
+      <div class="br"><div class="am" id="ammo">30 <small>/ 30</small></div><div class="gn" id="gname">Drizzle</div></div>
+    </div>
+    <div class="brk" id="brk" hidden></div>
+    <div class="touch" id="touch" hidden>
+      <div class="stick" id="stick"><i id="knob"></i></div>
+      <button class="tbtn rel" id="t-rel" type="button">R</button>
+      <button class="tbtn zm" id="t-zm" type="button">ZOOM</button>
+      <button class="tbtn swp" id="t-swp" type="button" hidden>SWAP</button>
+      <button class="tbtn duck" id="t-duck" type="button">DUCK</button>
+      <button class="tbtn call" id="t-call" type="button" hidden>CALL</button>
+      <button class="tbtn nk" id="t-nuke" type="button" hidden>NUKE</button>
+      <button class="tbtn jump" id="t-jump" type="button">JUMP</button>
+      <button class="tbtn fire" id="t-fire" type="button">FIRE</button>
+    </div>
+  </div>
+  <section class="panel" id="panel" aria-live="polite"><p class="hint">Loading the ravine...</p></section>
+</div>
+<script src="vendor/three/three.min.js"></script>
+<script src="vendor/three/examples/js/shaders/CopyShader.js"></script>
+<script src="vendor/three/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="vendor/three/examples/js/shaders/FXAAShader.js"></script>
+<script src="vendor/three/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="vendor/three/examples/js/postprocessing/RenderPass.js"></script>
+<script src="vendor/three/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="vendor/three/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="js/graphics.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
