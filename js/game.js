@@ -4,6 +4,9 @@ const panel = document.getElementById('panel');
 if (!window.THREE) { panel.innerHTML = '<p class="err">The 3D engine did not load. Check your connection and reload the page.</p>'; return; }
 const $ = id => document.getElementById(id);
 const stage = $('stage');
+const S=window.GullySettings?GullySettings.load():{fullscreen:false,scale:1,fov:72,showFps:false,fpsCap:0,vol:0.8,sfx:1,amb:1,sens:1,padSens:1,invertY:false,shake:1,cross:'#ffffff',keys:{fwd:'KeyW',back:'KeyS',left:'KeyA',right:'KeyD',jump:'Space',sprint:'ShiftLeft',crouch:'KeyC',reload:'KeyR',fire:'KeyF',scope:'KeyQ',wpn1:'Digit1',wpn2:'Digit2',swap:'KeyX',call:'KeyG',nuke:'KeyN',twin:'KeyT',mute:'KeyM',pause:'KeyP'}};
+if(!window.GullySettings) window.GullySettings={ACTIONS:[],keyLabel:c=>c,save:()=>{},defaults:()=>JSON.parse(JSON.stringify(S))};
+const K=a=>!!keys[S.keys[a]], iy=()=>S.invertY?-1:1;
 
 // ---------- constants ----------
 const WATER = -0.8, EYE = 1.25, GRAV = 18, FIXED = 1/60;
@@ -30,16 +33,16 @@ let AC=null, master=null, muted=false, noiseB=null, drone=null;
 try{muted=localStorage.getItem('gullyMute')==='1'}catch(e){}
 function audioInit(){
   if(AC){if(AC.state==='suspended')AC.resume().catch(()=>{});return}
-  try{AC=new (window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=muted?0:0.55;master.connect(AC.destination);
+  try{AC=new (window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=muted?0:0.55*S.vol;master.connect(AC.destination);
     noiseB=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);const d=noiseB.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;}catch(e){AC=null}
 }
 addEventListener('pointerdown',audioInit); addEventListener('keydown',audioInit);
-function setMute(m){muted=m;if(master)master.gain.value=m?0:0.55;try{localStorage.setItem('gullyMute',m?'1':'0')}catch(e){}}
+function setMute(m){muted=m;if(master)master.gain.value=m?0:0.55*S.vol;try{localStorage.setItem('gullyMute',m?'1':'0')}catch(e){}}
 function envG(g,t,a,peak,dec){g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(0.0002,peak),t+a);g.gain.exponentialRampToValueAtTime(0.0001,t+a+dec)}
 function nz(t,dur,type,f0,f1,peak,q){const s=AC.createBufferSource();s.buffer=noiseB;const f=AC.createBiquadFilter();f.type=type;f.frequency.setValueAtTime(f0,t);if(f1)f.frequency.exponentialRampToValueAtTime(f1,t+dur);if(q)f.Q.value=q;const g=AC.createGain();envG(g,t,0.005,peak,dur);s.connect(f).connect(g).connect(master);s.start(t);s.stop(t+dur+0.05)}
 function tn(t,type,f0,f1,dur,peak){const o=AC.createOscillator();o.type=type;o.frequency.setValueAtTime(f0,t);if(f1)o.frequency.exponentialRampToValueAtTime(f1,t+dur);const g=AC.createGain();envG(g,t,0.01,peak,dur);o.connect(g).connect(master);o.start(t);o.stop(t+dur+0.05)}
 function sfx(k,vol,arg){
-  if(!AC||muted) return; vol=vol==null?1:vol; if(vol<0.03) return; const t=AC.currentTime;
+  if(!AC||muted) return; vol=(vol==null?1:vol)*(k==='growl'?S.amb:S.sfx); if(vol<0.03) return; const t=AC.currentTime;
   try{switch(k){
     case 'shot': nz(t,0.06,'highpass',1800,0,0.16*vol); tn(t,'triangle',420,160,0.06,0.07*vol); break;
     case 'eshot': nz(t,0.05,'bandpass',1100,0,0.12*vol,1.5); break;
@@ -82,7 +85,7 @@ function droneOn(on){
   if(!AC) return;
   if(on&&!drone){const g=AC.createGain();g.gain.value=0.0001;const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=220;
     const os=[49,49.6,73.4].map(fr=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=fr;o.connect(f);o.start();return o});
-    f.connect(g).connect(master);g.gain.exponentialRampToValueAtTime(0.08,AC.currentTime+2.5);drone={g,os}}
+    f.connect(g).connect(master);g.gain.exponentialRampToValueAtTime(Math.max(0.0002,0.08*S.amb),AC.currentTime+2.5);drone={g,os}}
   else if(!on&&drone){const d=drone;drone=null;d.g.gain.cancelScheduledValues(AC.currentTime);d.g.gain.setValueAtTime(Math.max(0.0002,d.g.gain.value),AC.currentTime);d.g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+1.5);setTimeout(()=>d.os.forEach(o=>{try{o.stop()}catch(e){}}),1700)}
 }
 const distVol=(x,z)=>clamp(1-Math.hypot(x-P.x,z-P.z)/50,0,1);
@@ -101,7 +104,7 @@ function GH(x,z){
 }
 
 // ---------- renderer ----------
-const renderer=new THREE.WebGLRenderer({antialias:true});
+let renderer; try{ renderer=new THREE.WebGLRenderer({antialias:true}) }catch(err){ panel.innerHTML='<h2>3D graphics could not start</h2><p class="lede">Your browser or graphics driver blocked WebGL, which the game needs. Update your graphics driver, turn on hardware acceleration in your browser settings, then reload.</p>'; return; }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
 renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 stage.insertBefore(renderer.domElement,stage.firstChild);
@@ -1133,6 +1136,7 @@ function computeWeapon(){
   return w;
 }
 function startGame(fromPad){
+  pauseEl.hidden=true; setEl.hidden=true;
   audioInit(); clearTransient(); clearPickups();
   buildWorld((Math.random()*1e9)|0,levelFor(1));
   mods={dmg:0,rate:0,mag:0,reload:0,speed:0}; upLevel=0; special=null; hasScope=false; slot=0; shake=0; golden=false; modTier={}; resetEconomy(); slideT=0;
@@ -1143,7 +1147,7 @@ function startGame(fromPad){
   stats={tags:0,heads:0,shots:0,hits:0,turtle:0,soaked:0,ups:0,meds:0,smashed:0,weps:0};
   mode='play'; paused=false; feedItems=[]; $('brk').hidden=true; crouch=false; eyeH=EYE; modTier={};
   $('hud').hidden=false; $('t-zm').hidden=!weapon.zoom; $('t-swp').hidden=true;
-  camera.fov=72; camera.updateProjectionMatrix();
+  camera.fov=S.fov; camera.updateProjectionMatrix();
   beginWave();
   renderPanel(); updateHud();
   if(fromPad===true){inputMode='pad'}
@@ -1565,15 +1569,15 @@ function updateNuke(dt){
   if(t>7.6){scene.remove(C.g);C.g.traverse(m=>{if(m.material)m.material.dispose()});nukeS=null}
 }
 function clearNuke(){if(!nukeS)return;scene.remove(nukeS.bomb);if(nukeS.cloud)scene.remove(nukeS.cloud.g);nukeS=null;$('nukewarn').classList.remove('on')}
-function requestLock(){
-  inputMode='lock';
-  try{const r=renderer.domElement.requestPointerLock();if(r&&r.catch)r.catch(()=>fallbackDrag())}catch(e){fallbackDrag()}
-  setTimeout(()=>{if(mode==='play'&&document.pointerLockElement!==renderer.domElement&&inputMode==='lock')fallbackDrag()},700);
+function requestLock(o){
+  inputMode='lock'; const fail=()=>{ if(o&&o.fail) o.fail(); else fallbackDrag() };
+  try{const r=renderer.domElement.requestPointerLock();if(r&&r.catch)r.catch(fail)}catch(e){fail()}
+  setTimeout(()=>{if(mode==='play'&&pauseEl.hidden&&document.pointerLockElement!==renderer.domElement&&inputMode==='lock')fail()},700);
 }
 function fallbackDrag(){if(inputMode==='touch')return;inputMode='drag';paused=false;showBanner('Drag to look',`Click to fire, or hold <b>F</b>. WASD to move.`,2.5)}
 document.addEventListener('pointerlockchange',()=>{
   if(document.pointerLockElement===renderer.domElement){inputMode='lock';paused=false;hideBanner()}
-  else if(mode==='play'&&inputMode==='lock'){paused=true;fireHeld=false;showBanner('Paused','Click the battlefield to jump back in',0)}
+  else if(mode==='play'&&inputMode==='lock'){openPause()}
 });
 
 function fire(){
@@ -1792,16 +1796,16 @@ function playerOut(){
 function updatePlayer(dt){
   const k=weapon;
   let fx=0,fz=0;
-  if(keys.KeyW||keys.ArrowUp)fz+=1; if(keys.KeyS||keys.ArrowDown)fz-=1; if(keys.KeyD||keys.ArrowRight)fx+=1; if(keys.KeyA||keys.ArrowLeft)fx-=1;
+  if(K('fwd')||keys.ArrowUp)fz+=1; if(K('back')||keys.ArrowDown)fz-=1; if(K('right')||keys.ArrowRight)fx+=1; if(K('left')||keys.ArrowLeft)fx-=1;
   if(stickVec.active){fx+=stickVec.x;fz+=-stickVec.y}
   fx+=pad.mx; fz-=pad.my;
   const fl=Math.hypot(fx,fz); if(fl>1){fx/=fl;fz/=fl}
   const crouching=crouch||keys.ControlLeft; eyeH+=((crouching?EYE*0.5:EYE)-eyeH)*Math.min(1,dt*12);
-  let sp=k.move*(!crouching&&(keys.ShiftLeft||keys.ShiftRight||pad.sprint)?1.45:1)*(zoomed?0.5:1)*(crouching?0.5:1)*(speedT>0?1.5:1);
+  let sp=k.move*(!crouching&&(K('sprint')||keys.ShiftRight||pad.sprint)?1.45:1)*(zoomed?0.5:1)*(crouching?0.5:1)*(speedT>0?1.5:1);
   if(speedT>0){speedT-=dt;if(speedT<=0)addFeed('Your <i>speed shoes</i> wore out')} if(jumpT>0){jumpT-=dt;if(jumpT<=0)addFeed('Your <i>jump shoes</i> wore out')}
   const feetWet=GH(P.x,P.z)<WATER-0.05&&P.y<WATER; if(feetWet) sp*=0.5;
   const sy=Math.sin(P.yaw),cy=Math.cos(P.yaw), mvx=fx*cy-fz*sy, mvz=-fx*sy-fz*cy;
-  sprinting=!crouching&&(keys.ShiftLeft||keys.ShiftRight||pad.sprint)&&fl>0.3&&P.onGround; if(fl>0.3){lastMv.x=mvx;lastMv.z=mvz}
+  sprinting=!crouching&&(K('sprint')||keys.ShiftRight||pad.sprint)&&fl>0.3&&P.onGround; if(fl>0.3){lastMv.x=mvx;lastMv.z=mvz}
   if(slideT>0){slideT-=dt;const f=Math.max(0,slideT/0.75),ss=k.move*(0.5+2.4*f);P.x+=(slideDir.x*0.85+mvx*0.15)*ss*dt;P.z+=(slideDir.z*0.85+mvz*0.15)*ss*dt}
   else {P.x+=mvx*sp*dt; P.z+=mvz*sp*dt}
   P.x+=P.kx*dt; P.z+=P.kz*dt; const kd=Math.max(0,1-dt*5); P.kx*=kd; P.kz*=kd;
@@ -1813,7 +1817,7 @@ function updatePlayer(dt){
     if(P.y+eyeH+0.15>cy){ P.y=cy-eyeH-0.15; if(P.vy>0){P.vy=0; if(jumpT>0) sfx('clank',0.4)} } }
   const ground=supportY(P.x,P.z,P.y,0.35);
   if(P.y<=ground){P.y=ground;P.vy=0;P.onGround=true}else if(P.y-ground>0.05)P.onGround=false;
-  if((keys.Space||jumpHeld||pad.jump)&&P.onGround){crouch=false;slideT=0;P.vy=jumpT>0?10.5:6.2;if(jumpT>0)sfx('slide',0.5);P.onGround=false}
+  if((K('jump')||jumpHeld||pad.jump)&&P.onGround){crouch=false;slideT=0;P.vy=jumpT>0?10.5:6.2;if(jumpT>0)sfx('slide',0.5);P.onGround=false}
   // weapon
   cool=Math.max(0,cool-dt);
   if(reloadT>0){reloadT-=dt;if(reloadT<=0){reloadT=0;ammo=k.mag}}
@@ -1822,9 +1826,9 @@ function updatePlayer(dt){
   P.pitch=clamp(P.pitch,-1.45,1.45);
   // camera
   const bob=P.onGround&&fl>0?Math.sin(clock*sp*2.2)*0.035:0;
-  kickP=Math.max(0,kickP-dt*kickP*8-dt*0.02); camera.position.set(P.x,P.y+eyeH+bob,P.z); camera.rotation.set(P.pitch+kickP,P.yaw,slideT>0?0.06*slideT/0.75:0);
-  if(shake>0){camera.position.x+=rand(-shake,shake)*0.25;camera.position.y+=rand(-shake,shake)*0.25;shake=Math.max(0,shake-dt*1.4)}
-  const fov=zoomed?28:72; if(Math.abs(camera.fov-fov)>0.1){camera.fov+=(fov-camera.fov)*Math.min(1,dt*14);camera.updateProjectionMatrix()}
+  kickP=Math.max(0,kickP-dt*kickP*8-dt*0.02); camera.position.set(P.x,P.y+eyeH+bob,P.z); camera.rotation.set(P.pitch+kickP,P.yaw,slideT>0?0.06*slideT/0.75*S.shake:0);
+  if(shake>0){camera.position.x+=rand(-shake,shake)*0.25*S.shake;camera.position.y+=rand(-shake,shake)*0.25*S.shake;shake=Math.max(0,shake-dt*1.4)}
+  const fov=zoomed?28:S.fov; if(Math.abs(camera.fov-fov)>0.1){camera.fov+=(fov-camera.fov)*Math.min(1,dt*14);camera.updateProjectionMatrix()}
   if(viewGun){viewGun.visible=!zoomed;viewGun.position.set(0.2+(fl>0?Math.sin(clock*sp*2.2)*0.008:0),-0.19+bob*0.3-(reloadT>0?0.12:0),-0.42+gunKick*0.06);viewGun.rotation.x=(reloadT>0?-0.6:0)+gunKick*0.18}
 }
 
@@ -1863,22 +1867,25 @@ function updateHud(){
 const touchDevice=matchMedia('(pointer:coarse)').matches;
 let jumpHeld=false; const stickVec={active:false,x:0,y:0,id:null,ox:0,oy:0}; let lookTouch=null, dragLook=null;
 addEventListener('keydown',e=>{
-  if(e.code==='KeyM'){setMute(!muted);if(mode==='play')addFeed(muted?'Sound off':'Sound on');if(mode==='play'||mode==='menu')renderPanel()}
+  if(e.code==='Escape'){ if(!credEl.hidden){credEl.hidden=true;return} if(!setEl.hidden){closeSettings();return} }
+  if(mode==='play'&&(e.code===S.keys.pause||e.code==='Escape')){e.preventDefault();togglePause();return}
+  if(topOverlay()) return;
+  if(e.code===S.keys.mute){setMute(!muted);if(mode==='play')addFeed(muted?'Sound off':'Sound on');if(mode==='play'||mode==='menu')renderPanel()}
   if(mode==='break'&&(e.code==='Enter'||e.code==='NumpadEnter')){if(document.activeElement&&document.activeElement.dataset&&document.activeElement.dataset.buy)return;e.preventDefault();nextWave();return}
   if(mode==='win'&&(e.code==='Enter'||e.code==='NumpadEnter')){e.preventDefault();keepPlaying();return}
   if(mode!=='play')return;
   keys[e.code]=true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
-  if(e.code==='KeyR')startReload();
-  if(e.code==='KeyG')callBrother();
-  if(e.code==='KeyN')useNuke();
-  if(e.code==='KeyT')toggleTwin();
-  if(e.code==='KeyC')toggleCrouch(); if(e.code==='ControlLeft'){e.preventDefault();if(!e.repeat&&sprinting)startSlide()}
-  if(e.code==='Digit1')switchSlot(0); if(e.code==='Digit2')switchSlot(1); if(e.code==='KeyX')switchSlot(slot?0:1);
-  if(e.code==='KeyF')fireHeld=true;
-  if(e.code==='KeyQ'&&canZoom())zoomed=!zoomed;
+  if(e.code===S.keys.reload)startReload();
+  if(e.code===S.keys.call)callBrother();
+  if(e.code===S.keys.nuke)useNuke();
+  if(e.code===S.keys.twin)toggleTwin();
+  if(e.code===S.keys.crouch)toggleCrouch(); if(e.code==='ControlLeft'){e.preventDefault();if(!e.repeat&&sprinting)startSlide()}
+  if(e.code===S.keys.wpn1)switchSlot(0); if(e.code===S.keys.wpn2)switchSlot(1); if(e.code===S.keys.swap)switchSlot(slot?0:1);
+  if(e.code===S.keys.fire)fireHeld=true;
+  if(e.code===S.keys.scope&&canZoom())zoomed=!zoomed;
 });
-addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='KeyF'){fireHeld=false;fireLatch=false}});
+addEventListener('keyup',e=>{keys[e.code]=false;if(e.code===S.keys.fire){fireHeld=false;fireLatch=false}});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false;fireHeld=false});
 const cvs=renderer.domElement;
 cvs.addEventListener('contextmenu',e=>e.preventDefault());
@@ -1892,13 +1899,13 @@ cvs.addEventListener('mousedown',e=>{
 addEventListener('mouseup',e=>{
   if(e.button===2){zoomed=false;return}
   if(inputMode==='drag'&&dragLook){if(dragLook.moved<6&&mode==='play'){fire();}dragLook=null}
-  fireHeld=keys.KeyF||false; fireLatch=false;
+  fireHeld=K('fire'); fireLatch=false;
 });
 addEventListener('mousemove',e=>{
   if(mode!=='play'||paused)return;
-  const sens=zoomed?0.0009:0.0022;
-  if(inputMode==='lock'&&document.pointerLockElement===cvs){P.yaw-=e.movementX*sens;P.pitch-=e.movementY*sens}
-  else if(inputMode==='drag'&&dragLook){const dx=e.clientX-dragLook.x,dy=e.clientY-dragLook.y;dragLook.moved+=Math.abs(dx)+Math.abs(dy);dragLook.x=e.clientX;dragLook.y=e.clientY;P.yaw-=dx*sens*1.6;P.pitch-=dy*sens*1.6}
+  const sens=(zoomed?0.0009:0.0022)*S.sens;
+  if(inputMode==='lock'&&document.pointerLockElement===cvs){P.yaw-=e.movementX*sens;P.pitch-=e.movementY*sens*iy()}
+  else if(inputMode==='drag'&&dragLook){const dx=e.clientX-dragLook.x,dy=e.clientY-dragLook.y;dragLook.moved+=Math.abs(dx)+Math.abs(dy);dragLook.x=e.clientX;dragLook.y=e.clientY;P.yaw-=dx*sens*1.6;P.pitch-=dy*sens*1.6*iy()}
 });
 // touch
 cvs.addEventListener('pointerdown',e=>{
@@ -1911,7 +1918,7 @@ cvs.addEventListener('pointerdown',e=>{
 cvs.addEventListener('pointermove',e=>{
   if(e.pointerType!=='touch')return;
   if(stickVec.active&&e.pointerId===stickVec.id){const r=stage.getBoundingClientRect();let dx=e.clientX-r.left-stickVec.ox,dy=e.clientY-r.top-stickVec.oy;const l=Math.hypot(dx,dy),m=40;if(l>m){dx*=m/l;dy*=m/l}stickVec.x=dx/m;stickVec.y=dy/m;$('knob').style.transform=`translate(${dx}px,${dy}px)`}
-  else if(lookTouch&&e.pointerId===lookTouch.id){const s=zoomed?0.002:0.005;P.yaw-=(e.clientX-lookTouch.x)*s;P.pitch-=(e.clientY-lookTouch.y)*s;lookTouch.x=e.clientX;lookTouch.y=e.clientY}
+  else if(lookTouch&&e.pointerId===lookTouch.id){const s=(zoomed?0.002:0.005)*S.sens;P.yaw-=(e.clientX-lookTouch.x)*s;P.pitch-=(e.clientY-lookTouch.y)*s*iy();lookTouch.x=e.clientX;lookTouch.y=e.clientY}
 });
 function endTouch(e){if(stickVec.active&&e.pointerId===stickVec.id){stickVec.active=false;stickVec.x=stickVec.y=0;$('stick').classList.remove('on');$('knob').style.transform=''}if(lookTouch&&e.pointerId===lookTouch.id)lookTouch=null}
 cvs.addEventListener('pointerup',endTouch); cvs.addEventListener('pointercancel',endTouch);
@@ -1949,7 +1956,9 @@ function pollPad(dt){
   const pressed=i=>btn(i)&&!padPrev[i];
   const dz=v=>Math.abs(v)<0.14?0:(v-Math.sign(v)*0.14)/0.86;
   const ax=i=>dz(gp.axes[i]||0);
+  { const ov=topOverlay(); if(ov){ if(inputMode!=='pad'&&mode==='play'&&gp.buttons.some(b=>b.pressed)) inputMode='pad'; padNav(ov,pressed); pad.mx=pad.my=0; pad.jump=false; padPrev=gp.buttons.map((b,i)=>btn(i)); return } }
   if(mode==='menu'){
+    if(pressed(2)) openSettings('menu');
     if(pressed(14)||pressed(15)){const i=KID_ORDER.indexOf(kidId);kidId=KID_ORDER[(i+(pressed(15)?1:2))%3];renderPanel()}
     if(pressed(3)){const ks=Object.keys(AMMO);ammoType=ks[(ks.indexOf(ammoType)+1)%3];try{localStorage.setItem('gullyAmmo',ammoType)}catch(e){}renderPanel()}
     if(pressed(4)||pressed(5)) setStartLevel(LEVELS[(LEVELS.indexOf(startLevel)+(pressed(5)?1:2))%3]);
@@ -1968,15 +1977,15 @@ function pollPad(dt){
     const active=gp.axes.some(a=>Math.abs(a)>0.35)||gp.buttons.some(b=>b.pressed);
     if(active&&inputMode!=='pad'){
       inputMode='pad'; $('touch').hidden=true;
-      if(paused){paused=false;hideBanner()}
+      if(paused&&pauseEl.hidden){paused=false;hideBanner()}
       try{if(document.pointerLockElement)document.exitPointerLock()}catch(e){}
     }
     if(inputMode==='pad'){
-      if(pressed(9)){paused=!paused;if(paused){fireHeld=false;showBanner('Paused','Press Options to resume',0)}else hideBanner()}
+      if(pressed(9)){openPause()}
       if(!paused){
         pad.mx=ax(0); pad.my=ax(1);
-        const lx=ax(2), ly=ax(3), rate=(zoomed?0.9:2.9)*dt;
-        P.yaw-=Math.sign(lx)*lx*lx*rate; P.pitch-=Math.sign(ly)*ly*ly*rate*0.7;
+        const lx=ax(2), ly=ax(3), rate=(zoomed?0.9:2.9)*dt*S.padSens;
+        P.yaw-=Math.sign(lx)*lx*lx*rate; P.pitch-=Math.sign(ly)*ly*ly*rate*0.7*iy();
         pad.jump=btn(0); pad.sprint=btn(10)||(pad.sprint&&Math.hypot(pad.mx,pad.my)>0.3);
         const f=btn(7); if(f&&!pad.fire)fireHeld=true; if(!f&&pad.fire){fireHeld=false;fireLatch=false} pad.fire=f;
         const z=btn(6); if(z!==pad.zoom)zoomed=z&&canZoom(); pad.zoom=z;
@@ -2019,9 +2028,10 @@ function drawPortrait(c,kid){
   c.restore(); c.restore();
 }
 function renderPanel(){
+  panel.hidden=mode==='play';
   if(mode==='menu'){
     panel.innerHTML=`<h2>Choose your blaster</h2>
-      <p class="lede">The rival scout troop has gone feral: masked, glowing-eyed and hunting you through The Creek, the Abandoned City and the Office Tower. Tag scouts to make them drop cash, and spend it in the supply shop between waves on tune-ups, gear, blaster types and skin features. <b>Your goal: buy everything in the shop, then the Golden skin, to build the ultimate weapon.</b> You start with 3 lives, and the shop sells more lives, a bigger soak meter and the absurdly expensive Foam Nuke. Smash crates, boxes and barrels to find hidden rain ponchos, speed shoes, jump shoes and a cell phone that calls your big brother in to help.</p>
+      <p class="lede">Tag masked scouts for cash, smash cover for hidden power-ups, and buy out the supply shop between waves to build the ultimate golden weapon. Three maps, and a boss every fifth wave.</p>
       <div class="kids">${Object.values(KIDS).map(k=>`
         <button class="kid" type="button" id="kid-${k.id}" data-kid="${k.id}" aria-pressed="${k.id===kidId}">
           <canvas width="168" height="168" data-portrait="${k.id}" aria-hidden="true"></canvas>
@@ -2031,23 +2041,16 @@ function renderPanel(){
           <span class="stats">${Object.entries(k.stats).map(([n,v])=>`<span>${n}</span><span class="bar">${[1,2,3,4,5].map(i=>`<i class="${i<=v?'on':''}"></i>`).join('')}</span>`).join('')}</span>
         </button>`).join('')}
       </div>
-      <div class="keys">${touchDevice?`<span>Left thumb: move</span><span>Right thumb: look</span><span>FIRE, JUMP, R and ZOOM buttons</span>`:`<span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</span><span>Mouse: look</span><span>Click: fire</span><span><kbd>R</kbd> reload</span><span><kbd>Shift</kbd> sprint &nbsp;<kbd>Space</kbd> jump</span><span>Right-click or <kbd>Q</kbd>: scope</span><span><kbd>1</kbd> <kbd>2</kbd> or wheel: switch weapon</span><span><kbd>C</kbd> crouch (or hold <kbd>Ctrl</kbd>), while sprinting to slide</span><span><kbd>G</kbd> call big brother</span><span><kbd>N</kbd> foam nuke</span><span><kbd>T</kbd> attach or remove twin barrel</span><span><kbd>M</kbd> sound on/off</span>`}</div>
-      <div class="keys"><span><kbd>L-stick</kbd> move, click to sprint</span><span><kbd>R-stick</kbd> look</span><span><kbd>R2</kbd> fire &nbsp;<kbd>L2</kbd> scope</span><span><kbd>Cross</kbd> jump &nbsp;<kbd>Square</kbd> reload</span><span><kbd>Options</kbd> pause</span><span><kbd>Triangle</kbd> switch weapon</span><span><kbd>D-pad up</kbd> call big brother</span><span><kbd>D-pad down</kbd> foam nuke</span><span><kbd>Circle</kbd> or <kbd>R3</kbd> crouch / slide</span><span><kbd>Triangle</kbd> blaster type (menu)</span><span><kbd>L1</kbd> <kbd>R1</kbd> pick map in menu</span></div>
       <div class="row"><span class="hint"><b>Start in</b></span>${LEVELS.map(l=>`<button class="btn ghost lvl" id="lvl-${l}" type="button" aria-pressed="${startLevel===l}">${LEVEL_NAME[l]}</button>`).join('')}</div>
       <div class="row"><span class="hint"><b>Blaster type</b></span>${Object.entries(AMMO).map(([k,a])=>`<button class="btn ghost lvl" id="am-${k}" type="button" aria-pressed="${ammoType===k}">${a.n}</button>`).join('')}<span class="hint">${AMMO[ammoType].desc}</span></div>
-      ${window.GFX?`<div class="row"><span class="hint"><b>Graphics</b></span>${GFX.levels.map(k=>`<button class="btn ghost lvl" id="gq-${k}" type="button" aria-pressed="${GFX.quality()===k}">${GFX.labelOf(k)}</button>`).join('')}<span class="hint">High adds glow, sharper shadows and more particles. Pick Low if the game stutters.</span></div>`:''}
       <p class="hint" id="padline">${padLine()}</p>
-      <div class="row"><button class="btn" id="go" type="button">Drop in as ${KIDS[kidId].name}</button><button class="btn ghost" id="fs" type="button">Fullscreen</button>${best?`<span class="hint">Best: <b>${best}</b></span>`:''}${goldBuilt?`<span class="hint">Golden Blasters built: <b>${goldBuilt}</b></span>`:''}</div>`;
+      <div class="row actions"><button class="btn" id="go" type="button">Drop in as ${KIDS[kidId].name}</button><button class="btn ghost" id="setb" type="button">Settings</button><button class="btn ghost" id="credb" type="button">Credits</button>${APP?'<button class="btn ghost" id="quitb" type="button">Quit</button>':''}${best?`<span class="hint">Best: <b>${best}</b></span>`:''}${goldBuilt?`<span class="hint">Golden Blasters built: <b>${goldBuilt}</b></span>`:''}</div>`;
     panel.querySelectorAll('canvas[data-portrait]').forEach(c=>drawPortrait(c.getContext('2d'),KIDS[c.dataset.portrait]));
     panel.querySelectorAll('.kid').forEach(b=>b.onclick=()=>{kidId=b.dataset.kid;renderPanel();$('kid-'+kidId).focus()});
-    $('go').onclick=startGame; $('fs').onclick=goFull; LEVELS.forEach(l=>$('lvl-'+l).onclick=()=>setStartLevel(l)); if(window.GFX) GFX.levels.forEach(k=>$('gq-'+k).onclick=()=>{GFX.setQuality(k);renderPanel();$('gq-'+k).focus()}); Object.keys(AMMO).forEach(k=>$('am-'+k).onclick=()=>{ammoType=k;try{localStorage.setItem('gullyAmmo',k)}catch(e){}renderPanel();$('am-'+k).focus()});
+    $('go').onclick=startGame; $('setb').onclick=()=>openSettings('menu'); $('credb').onclick=openCredits; if(APP) $('quitb').onclick=()=>APP.quit(); LEVELS.forEach(l=>$('lvl-'+l).onclick=()=>setStartLevel(l)); Object.keys(AMMO).forEach(k=>$('am-'+k).onclick=()=>{ammoType=k;try{localStorage.setItem('gullyAmmo',k)}catch(e){}renderPanel();$('am-'+k).focus()});
     return;
   }
-  if(mode==='play'){
-    panel.innerHTML=`<div class="row"><span class="hint">Playing as <b>${weapon.name}</b> with the <b>${weapon.gun}</b> (${AMMO[ammoType].short}). ${touchDevice?'Use the on-screen controls.':'Press <kbd>Esc</kbd> to pause.'}</span></div>
-      <div class="row"><button class="btn ghost" id="fs" type="button">Fullscreen</button><button class="btn ghost" id="snd" type="button">${muted?'Sound: off':'Sound: on'}</button>${window.GFX?`<button class="btn ghost" id="gfx" type="button">Graphics: ${GFX.label()}</button>`:''}<button class="btn ghost" id="quit" type="button">Back to HQ</button></div>`;
-    $('fs').onclick=goFull; $('quit').onclick=toMenu; $('snd').onclick=()=>{audioInit();setMute(!muted);renderPanel()}; if(window.GFX) $('gfx').onclick=()=>{const L=GFX.levels;GFX.setQuality(L[(L.indexOf(GFX.quality())+1)%L.length]);renderPanel()}; return;
-  }
+  if(mode==='play') return;
   if(mode==='dead'){
     const acc=stats.shots?Math.min(100,Math.round(stats.hits/stats.shots*100)):0, isBest=score>=best&&score>0;
     panel.innerHTML=`<h2>Soaked on wave ${wave} ${isBest?'<span class="badge">New best</span>':''}</h2>
@@ -2058,18 +2061,151 @@ function renderPanel(){
         <div class="cell"><div class="k">Accuracy</div><div class="v">${acc}%</div></div>
       </div>
       <p class="hint">Upgrades found: <b>${stats.ups}</b> · Med packs used: <b>${stats.meds}</b> · Weapon caches: <b>${stats.weps||0}</b> · Things smashed: <b>${stats.smashed||0}</b>. ${stats.turtle?`The bog turtle ate ${stats.turtle} scout${stats.turtle===1?'':'s'}. `:''}Best: <b>${best}</b></p>
-      <div class="row"><button class="btn" id="again" type="button">Go again as ${weapon.name}</button><button class="btn ghost" id="swap" type="button">Pick a different kid</button></div>`;
-    $('again').onclick=()=>{hideBanner();startGame()}; $('swap').onclick=toMenu; $('again').focus({preventScroll:true});
+      <div class="row"><button class="btn" id="again" type="button">Go again as ${weapon.name}</button><button class="btn ghost" id="swap" type="button">Pick a different kid</button>${APP?'<button class="btn ghost" id="dquit" type="button">Quit to desktop</button>':''}</div>`;
+    $('again').onclick=()=>{hideBanner();startGame()}; $('swap').onclick=toMenu; if(APP) $('dquit').onclick=()=>APP.quit(); $('again').focus({preventScroll:true});
   }
 }
 function toMenu(){
-  mode='menu'; paused=false; hideBanner(); try{document.exitPointerLock()}catch(e){}
+  mode='menu'; paused=false; pauseEl.hidden=true; hideBanner(); try{document.exitPointerLock()}catch(e){}
   $('hud').hidden=true; $('touch').hidden=true;
   if(viewGun){camera.remove(viewGun);freeObj(viewGun,true);viewGun=null}
-  clearTransient(); clearPickups(); envTarget=0; slot=0; if(curLevel!==startLevel) buildWorld((Math.random()*1e9)|0,startLevel); $('brk').hidden=true; camera.fov=72; camera.updateProjectionMatrix();
+  clearTransient(); clearPickups(); envTarget=0; slot=0; if(curLevel!==startLevel) buildWorld((Math.random()*1e9)|0,startLevel); $('brk').hidden=true; camera.fov=S.fov; camera.updateProjectionMatrix();
   renderPanel(); seedMenuScouts();
 }
 function goFull(){try{const r=stage.requestFullscreen&&stage.requestFullscreen();if(r&&r.catch)r.catch(()=>{})}catch(e){}}
+
+// ---------- desktop shell: pause, settings, credits ----------
+const GAME_VERSION='1.0.0', APP=window.GullyApp||null;
+function mkOverlay(id){const d=document.createElement('div');d.className='ovl';d.id=id;d.hidden=true;d.setAttribute('role','dialog');stage.appendChild(d);return d}
+const pauseEl=mkOverlay('pausem'), setEl=mkOverlay('setm'), credEl=mkOverlay('credm');
+const fpsEl=document.createElement('div'); fpsEl.className='fps'; fpsEl.id='fps'; fpsEl.hidden=true; stage.appendChild(fpsEl);
+let setFrom=null, setTab='display', rebinding=null;
+const topOverlay=()=>[credEl,setEl,pauseEl].find(o=>!o.hidden)||null;
+// ----- pause -----
+function openPause(){
+  if(mode!=='play'||!pauseEl.hidden) return;
+  paused=true; fireHeld=false; fireLatch=false; zoomed=false; jumpHeld=false; for(const k in keys) keys[k]=false; hideBanner();
+  try{if(document.pointerLockElement)document.exitPointerLock()}catch(e){}
+  pauseEl.innerHTML=`<div class="ovl-card">
+    <h2>Paused</h2>
+    <p class="hint">${LEVEL_NAME[curLevel]} · Wave ${wave} · ${score} points · $${cash}</p>
+    <div class="menu-col">
+      <button class="btn" id="p-resume" type="button">Resume</button>
+      <button class="btn ghost" id="p-set" type="button">Settings</button>
+      <button class="btn ghost" id="p-restart" type="button">Restart run</button>
+      <button class="btn ghost" id="p-hq" type="button">Quit to HQ</button>
+      ${APP?'<button class="btn ghost" id="p-quit" type="button">Quit to desktop</button>':''}
+    </div>
+    <p class="hint" id="p-note">${getPad()?'Options resumes':touchDevice?'':'Esc or '+GullySettings.keyLabel(S.keys.pause)+' resumes'}</p>
+  </div>`;
+  pauseEl.hidden=false;
+  $('p-resume').onclick=closePause; $('p-set').onclick=()=>openSettings('pause');
+  $('p-restart').onclick=()=>{pauseEl.hidden=true;startGame(inputMode==='pad')}; $('p-hq').onclick=()=>{pauseEl.hidden=true;toMenu()};
+  if(APP) $('p-quit').onclick=()=>APP.quit();
+  $('p-resume').focus({preventScroll:true});
+}
+function closePause(){
+  if(pauseEl.hidden) return;
+  pauseEl.hidden=true;
+  if(inputMode==='lock'||inputMode==='drag'&&!touchDevice){
+    requestLock({fail:()=>{openPause(); const n=$('p-note'); if(n) n.textContent='Click Resume to jump back in'}});
+  } else paused=false;
+}
+function togglePause(){ if(mode!=='play') return; if(pauseEl.hidden) openPause(); else if(setEl.hidden&&credEl.hidden) closePause() }
+// ----- settings -----
+const TABS=[['display','Display'],['audio','Audio'],['controls','Controls'],['gameplay','Gameplay']];
+const CROSS=['#ffffff','#7cff4f','#2ec4d6','#f2c94c','#ff5a8a','#ff3b2f'];
+function rng_(id,label,min,max,step,val,fmt){return `<label class="setrow" for="${id}"><span>${label}</span><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"><output id="${id}-o">${fmt(val)}</output></label>`}
+function chk_(id,label,val,sub){return `<label class="setrow" for="${id}"><span>${label}${sub?`<small>${sub}</small>`:''}</span><input type="checkbox" id="${id}" ${val?'checked':''}><i></i></label>`}
+function sel_(id,label,opts,val){return `<label class="setrow" for="${id}"><span>${label}</span><select id="${id}">${opts.map(([v,t])=>`<option value="${v}" ${String(v)===String(val)?'selected':''}>${t}</option>`).join('')}</select><i></i></label>`}
+const pct=v=>Math.round(v*100)+'%';
+function settingsBody(){
+  if(setTab==='display') return chk_('s-fs','Fullscreen',S.fullscreen,APP?'F11 or Alt+Enter also toggles':'')+
+    (window.GFX?sel_('s-gfx','Graphics preset',GFX.levels.map(k=>[k,GFX.labelOf(k)]),GFX.quality()):'')+
+    rng_('s-scale','Render scale',0.5,1,0.05,S.scale,pct)+rng_('s-fov','Field of view',60,100,1,S.fov,v=>v+'°')+
+    chk_('s-fps','Show frame rate',S.showFps)+sel_('s-cap','Frame rate limit',[[0,'Unlimited'],[60,'60 fps'],[30,'30 fps (saves battery)']],S.fpsCap)+
+    '<p class="hint">High adds glow, sharper shadows and more particles. Lower the render scale or pick Low if the game stutters.</p>';
+  if(setTab==='audio') return rng_('s-vol','Master volume',0,1,0.05,S.vol,pct)+rng_('s-sfx','Effects',0,1,0.05,S.sfx,pct)+rng_('s-amb','Growls and boss drone',0,1,0.05,S.amb,pct)+chk_('s-mute','Mute everything',muted);
+  if(setTab==='controls') return rng_('s-sens','Mouse sensitivity',0.2,3,0.05,S.sens,v=>(+v).toFixed(2)+'×')+rng_('s-pad','Controller look speed',0.3,2.5,0.05,S.padSens,v=>(+v).toFixed(2)+'×')+chk_('s-inv','Invert look up/down',S.invertY)+
+    `<div class="setsub"><span>Keyboard</span><button class="btn ghost sm" id="s-keyreset" type="button">Reset keys</button></div>
+    <div class="keygrid">${GullySettings.ACTIONS.map(([a,l])=>`<div class="keyrow"><span>${l}</span><button class="keybtn${rebinding===a?' wait':''}" type="button" data-act="${a}">${rebinding===a?'Press a key…':GullySettings.keyLabel(S.keys[a])}</button></div>`).join('')}</div>
+    <p class="hint">Mouse: look · Left click: fire · Right click: scope · Wheel: swap weapon. Arrow keys and holding Left Ctrl always work too.<br>Controller: L-stick move (click to sprint) · R-stick look · R2 fire · L2 scope · Cross jump · Square reload · Circle crouch · Triangle swap · D-pad up/down brother/nuke · Options pause.</p>`;
+  return rng_('s-shake','Screen shake',0,1,0.05,S.shake,pct)+
+    `<div class="setrow"><span>Crosshair color</span><span class="swatches">${CROSS.map(c=>`<button class="chipbtn sm" type="button" data-cross="${c}" aria-label="Crosshair ${c}" aria-pressed="${S.cross===c}" style="background:${c}"></button>`).join('')}</span><i></i></div>
+    <div class="setsub"><span>Reset</span><button class="btn ghost sm" id="s-reset" type="button">Reset all settings</button></div>`;
+}
+function renderSettings(){
+  const f=document.activeElement&&document.activeElement.id;
+  setEl.innerHTML=`<div class="ovl-card wide">
+    <div class="sethead"><h2>Settings</h2><span class="hint">v${GAME_VERSION}</span></div>
+    <div class="tabs" role="tablist">${TABS.map(([k,l])=>`<button class="tab" type="button" role="tab" id="t-${k}" aria-selected="${setTab===k}">${l}</button>`).join('')}</div>
+    <div class="setbody">${settingsBody()}</div>
+    <div class="row"><button class="btn" id="s-back" type="button">Back</button><span class="hint">Changes save automatically</span></div></div>`;
+  TABS.forEach(([k])=>$('t-'+k).onclick=()=>{setTab=k;rebinding=null;renderSettings();$('t-'+k).focus()});
+  $('s-back').onclick=closeSettings;
+  const on=(id,ev,fn)=>{const el=$(id);if(el)el.addEventListener(ev,fn)};
+  const live=(id,key,fmt,after)=>on(id,'input',e=>{const v=+e.target.value;S[key]=v;$(id+'-o').textContent=fmt(v);saveSettings();after&&after()});
+  on('s-fs','change',e=>setFullscreen(e.target.checked));
+  on('s-gfx','change',e=>{GFX.setQuality(e.target.value);applySettings()});
+  live('s-scale','scale',pct,()=>{if(window.GFX&&GFX.setScale)GFX.setScale(S.scale)}); live('s-fov','fov',v=>v+'°',()=>{if(!zoomed){camera.fov=S.fov;camera.updateProjectionMatrix()}});
+  on('s-fps','change',e=>{S.showFps=e.target.checked;saveSettings();applySettings()}); on('s-cap','change',e=>{S.fpsCap=+e.target.value;saveSettings()});
+  live('s-vol','vol',pct,applyVolume); live('s-sfx','sfx',pct,()=>sfx('hit',1)); live('s-amb','amb',pct);
+  on('s-mute','change',e=>{audioInit();setMute(e.target.checked)});
+  live('s-sens','sens',v=>(+v).toFixed(2)+'×'); live('s-pad','padSens',v=>(+v).toFixed(2)+'×'); on('s-inv','change',e=>{S.invertY=e.target.checked;saveSettings()});
+  setEl.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{rebinding=rebinding===b.dataset.act?null:b.dataset.act;renderSettings();const nb=setEl.querySelector(`[data-act="${b.dataset.act}"]`);if(nb)nb.focus()});
+  on('s-keyreset','click',()=>{S.keys=GullySettings.defaults().keys;saveSettings();renderSettings()});
+  live('s-shake','shake',pct);
+  setEl.querySelectorAll('[data-cross]').forEach(b=>b.onclick=()=>{S.cross=b.dataset.cross;saveSettings();applySettings();renderSettings()});
+  on('s-reset','click',()=>{const fs=S.fullscreen;Object.assign(S,GullySettings.defaults());S.fullscreen=fs;saveSettings();applySettings();if(window.GFX&&GFX.setScale)GFX.setScale(S.scale);renderSettings()});
+  const back=f&&$(f); if(back) back.focus({preventScroll:true});
+}
+function openSettings(from){ setFrom=from; setTab=setTab||'display'; rebinding=null; renderSettings(); setEl.hidden=false; const t=$('t-'+setTab); if(t) t.focus({preventScroll:true}) }
+function closeSettings(){ rebinding=null; setEl.hidden=true; if(setFrom==='pause'){const r=$('p-set');if(r)r.focus({preventScroll:true})} else {const b=$('setb');if(b)b.focus({preventScroll:true})} }
+// key capture for rebinding (runs before the game's own key handler)
+addEventListener('keydown',e=>{
+  if(!rebinding) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if(e.code!=='Escape'){ const prev=S.keys[rebinding], other=Object.keys(S.keys).find(a=>a!==rebinding&&S.keys[a]===e.code); if(other) S.keys[other]=prev; S.keys[rebinding]=e.code; saveSettings() }
+  const a=rebinding; rebinding=null; renderSettings(); const b=setEl.querySelector(`[data-act="${a}"]`); if(b) b.focus();
+},true);
+// ----- credits -----
+function openCredits(){
+  credEl.innerHTML=`<div class="ovl-card"><h2>Credits</h2>
+    <dl class="blist"><dt>Game</dt><dd>Matthew Lynn</dd><dt>Built with</dt><dd>three.js r128 (MIT License)</dd><dt>Fonts</dt><dd>Lilita One by Juan Montoreano, Nunito by Vernon Adams (SIL Open Font License 1.1)</dd>
+    <dt>Sound</dt><dd>Synthesized live in the game, no recorded samples</dd><dt>Version</dt><dd>${GAME_VERSION}${APP?' · desktop':' · web'}</dd></dl>
+    <div class="row"><button class="btn" id="c-back" type="button">Back</button></div></div>`;
+  credEl.hidden=false; $('c-back').onclick=()=>{credEl.hidden=true;const b=$('credb');if(b)b.focus({preventScroll:true})}; $('c-back').focus({preventScroll:true});
+}
+// ----- applying settings -----
+function saveSettings(){ GullySettings.save(S) }
+function applyVolume(){ if(master) master.gain.value=muted?0:0.55*S.vol }
+function setFullscreen(v){
+  S.fullscreen=!!v; saveSettings();
+  if(APP){APP.setFullscreen(S.fullscreen);return}
+  try{ if(v&&!document.fullscreenElement){const r=document.documentElement.requestFullscreen();if(r&&r.catch)r.catch(()=>{S.fullscreen=false;saveSettings();if(!setEl.hidden)renderSettings()})}
+       else if(!v&&document.fullscreenElement) document.exitFullscreen() }catch(e){}
+}
+document.addEventListener('fullscreenchange',()=>{ if(APP) return; S.fullscreen=!!document.fullscreenElement; saveSettings(); if(!setEl.hidden&&setTab==='display') renderSettings() });
+if(APP&&APP.onFullscreen) APP.onFullscreen(v=>{ S.fullscreen=!!v; saveSettings(); if(!setEl.hidden&&setTab==='display') renderSettings() });
+function applySettings(){
+  applyVolume(); fpsEl.hidden=!S.showFps; stage.style.setProperty('--crossc',S.cross);
+  if(!zoomed&&camera){camera.fov=S.fov;camera.updateProjectionMatrix()}
+}
+// ----- controller navigation for every menu overlay -----
+function padNav(ov,pressed){
+  const items=[...ov.querySelectorAll('button:not([disabled]),input,select')].filter(el=>el.offsetParent!==null), cur=items.indexOf(document.activeElement), el=document.activeElement;
+  const move=d=>{(items[cur<0?0:Math.max(0,Math.min(items.length-1,cur+d))]||items[0]).focus()};
+  if(pressed(12)) move(-1); if(pressed(13)) move(1);
+  const lr=pressed(15)?1:pressed(14)?-1:0;
+  if(lr){ if(el&&el.type==='range'){lr>0?el.stepUp():el.stepDown();el.dispatchEvent(new Event('input',{bubbles:true}))}
+    else if(el&&el.tagName==='SELECT'){el.selectedIndex=Math.max(0,Math.min(el.options.length-1,el.selectedIndex+lr));el.dispatchEvent(new Event('change',{bubbles:true}))}
+    else move(lr) }
+  if(pressed(0)&&el&&items.includes(el)){ if(el.type==='checkbox'){el.checked=!el.checked;el.dispatchEvent(new Event('change',{bubbles:true}))} else if(el.tagName!=='SELECT'&&el.type!=='range') el.click() }
+  if(pressed(1)||pressed(9)){ if(ov===credEl){credEl.hidden=true} else if(ov===setEl) closeSettings(); else if(ov===pauseEl){inputMode='pad';pauseEl.hidden=true;paused=false} }
+}
+// touch pause button
+{ const b=document.createElement('button'); b.className='tbtn pz'; b.id='t-pause'; b.type='button'; b.textContent='II'; b.setAttribute('aria-label','Pause'); $('touch').appendChild(b); b.addEventListener('pointerdown',e=>{e.preventDefault();openPause()}) }
+applySettings();
 
 // idle scouts for the menu flyover
 let menuScouts=[];
@@ -2097,7 +2233,10 @@ function applyEnv(dt){
 // ---------- loop ----------
 let last=performance.now(), acc=0;
 let frameErrs=0, ctxLost=false;
+let lastDraw=0, fpsN=0, fpsT=0;
 function frame(now){
+  if(S.fpsCap&&now-lastDraw<1000/S.fpsCap-1.5){requestAnimationFrame(frame);return}
+  lastDraw=now; fpsN++; if(now-fpsT>=500){ if(S.showFps) fpsEl.textContent=Math.round(fpsN*1000/(now-fpsT))+' fps'; fpsN=0; fpsT=now }
   try{ frameInner(now) }catch(err){ frameErrs++; console.error('frame error',err); if(frameErrs<=3&&mode==='play') addFeed('<i>Glitch caught</i>, game kept running') }
   requestAnimationFrame(frame);
 }

@@ -13,6 +13,7 @@ const QUAL={
 let q=null; try{q=localStorage.getItem(Q_KEY)}catch(e){}
 if(!QUAL[q]) q=matchMedia('(pointer:coarse)').matches?'medium':'high';
 
+let scale=1; try{const st=JSON.parse(localStorage.getItem('gullySettings')||'{}');if(st.scale)scale=+st.scale}catch(e){}
 let R,S,C,SUN,HEMI,W=800,H=450, composer=null, bloomPass=null, gradePass=null, fxaaPass=null, sky=null, parts=null, level='ravine', mats=null, bossK=0, time=0;
 const glowList=[], textured=[];
 const hasPost=()=>!!(window.THREE&&THREE.EffectComposer&&THREE.RenderPass&&THREE.ShaderPass);
@@ -185,7 +186,7 @@ function init(o){
 }
 function setQuality(nq,first){
   if(!QUAL[nq]) return; q=nq; try{localStorage.setItem(Q_KEY,q)}catch(e){}
-  R.setPixelRatio(Math.min(window.devicePixelRatio||1,QUAL[q].pr)); R.setSize(W,H,false);
+  R.setPixelRatio(Math.min(window.devicePixelRatio||1,QUAL[q].pr)*scale); R.setSize(W,H,false);
   buildPost(); applyShadow(); glowList.forEach(applyGlow); textured.forEach(m=>{const n=m.userData.gfxTex;if(n)setMap(m,n)});
   const k=pMode; pMode=''; setParticleMode(k||'ravine');
   if(!first&&mats) applyLevel();
@@ -224,7 +225,8 @@ function frame(dt){
   if(composer) composer.render(dt); else R.render(S,C);
 }
 const WM_WATER=()=>mats&&mats.WM.water&&mats.WM.water.map;
-window.GFX={init,setQuality,resize,setLevel,env,frame,glow,
+function setScale(s){scale=Math.max(0.5,Math.min(1,+s||1)); setQuality(q)}
+window.GFX={init,setQuality,setScale,resize,setLevel,env,frame,glow,
   quality:()=>q, label:()=>QUAL[q].label, levels:Object.keys(QUAL), labelOf:k=>QUAL[k].label,
   b:x=>bloomOn()?x:1, tex};
 })();
