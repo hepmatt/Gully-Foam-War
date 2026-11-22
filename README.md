@@ -1,76 +1,111 @@
 # Gully Foam War
 
-A first-person foam, paintball and airsoft blaster game that runs in the browser. Fight masked scouts across The Creek, the Abandoned City and the Office Tower. Tag them for cash, smash cover to find power-ups, and buy out the supply shop to build the ultimate golden weapon.
+A first-person 3D wave shooter built with three.js that runs in any modern browser and ships as a Windows desktop app. Players tag masked scouts across three procedurally laid-out maps, smash destructible cover for power-ups, and upgrade their blaster between waves.
 
-## Play it
+**[Play in the browser](https://hepmatt.github.io/gully-foam-war/)** · **[Download for Windows](https://github.com/hepmatt/gully-foam-war/releases)**
 
-Open `index.html` in a browser. Everything is in the repo, so it also works offline.
+![Character and level select screen](docs/screenshots/title.jpg)
 
-To put it online with GitHub Pages:
+| The Creek                                | Abandoned City                               | Office Tower                                 |
+| ---------------------------------------- | -------------------------------------------- | -------------------------------------------- |
+| ![The Creek](docs/screenshots/creek.jpg) | ![Abandoned City](docs/screenshots/city.jpg) | ![Office Tower](docs/screenshots/office.jpg) |
 
-1. Push this repo to GitHub.
-2. Go to **Settings → Pages**.
-3. Under **Source**, pick **Deploy from a branch**, choose `main` and `/ (root)`, then save.
-4. The game appears at `https://<your-username>.github.io/<repo-name>/` after a minute or two.
+## Features
 
-## Windows desktop version
+- Three maps (outdoor ravine, city streets, office interior) generated from a seeded random number generator, so each layout is repeatable.
+- Enemy AI that patrols, reacts to noise, checks line of sight before firing, and uses elevated perches. A boss arrives every fifth wave.
+- Verlet ragdoll physics for tagged enemies, with water drag and terrain collision.
+- Destructible cover with per-material hit points and flying debris.
+- Three graphics presets, from a low-end mode for laptops and phones to HDR bloom, FXAA and dynamic shadows.
+- Keyboard and mouse, PS5 controller, and on-screen touch controls.
+- All sound effects synthesized at runtime with the Web Audio API. The game ships no audio files.
+- Fully offline: three.js, fonts and assets are bundled in the repo.
 
-The game also ships as a Windows app built with Electron.
+## Tech stack
 
-- **Run from source:** `npm install`, then `npm start`.
-- **Build on your own PC:** `npm run dist:win` writes an installer (`GullyFoamWar-Setup-<version>.exe`) and a no-install portable `.exe` to `dist/`.
-- **Build on GitHub:** open the **Actions** tab, choose **Build Windows**, then **Run workflow**. The finished `.exe` files appear under the run's **Artifacts**. Pushing a version tag such as `v1.0.1` also attaches them to a GitHub Release.
+| Area      | Tools                                                              |
+| --------- | ------------------------------------------------------------------ |
+| Rendering | three.js r128, WebGL, post-processing (bloom, FXAA, color grading) |
+| Language  | JavaScript (ES2020), HTML, CSS                                     |
+| Desktop   | Electron, electron-builder (NSIS installer and portable .exe)      |
+| CI/CD     | GitHub Actions builds the Windows installer on every version tag   |
+| Tooling   | Prettier, EditorConfig, npm                                        |
 
-Windows will show a "Windows protected your PC" warning the first time, because the app is not code-signed yet. Click **More info → Run anyway**. Signing needs a paid certificate and is worth doing before a Steam or public release.
+## Architecture
 
-Desktop extras: **F11** or **Alt+Enter** toggles fullscreen, the window size is remembered, and the menus have **Quit to desktop**. If a PC's graphics card is blocked or missing, the app falls back to software rendering instead of failing to start.
+```
+index.html          Loads three.js, then settings.js, graphics.js and game.js in order
+js/settings.js      Default settings, load and save to localStorage, key names
+js/game.js          Game loop, world generation, physics, enemy AI, weapons, shop, audio, input, menus
+js/graphics.js      Optional graphics layer: post-processing, sky, textures, shadows, particles
+electron/           Desktop window, fullscreen and quit handling
+```
 
-## Project layout
+Key design decisions:
 
-| Path | What it is |
-|---|---|
-| `index.html` | Page markup and script loading order |
-| `css/style.css` | All page and HUD styling |
-| `js/game.js` | Game logic: levels, enemies, weapons, shop, sound, input, menus |
-| `js/settings.js` | Player settings: defaults, saving, key names |
-| `js/graphics.js` | Graphics layer: post-processing, sky, textures, shadows, particles |
-| `vendor/three/` | three.js r128 and the post-processing add-ons it uses (MIT license) |
-| `fonts/` | Lilita One and Nunito, bundled so the game works offline (SIL Open Font License) |
-| `electron/` | Desktop app: window, fullscreen and quit handling |
-| `build/` | App icon (`icon.png`, `icon.ico`) |
-| `.github/workflows/` | GitHub Actions build for the Windows installer |
+- **Fixed timestep physics.** The render loop runs at the display's frame rate, but physics advances in fixed 1/60 s steps through an accumulator, so movement and ragdolls behave the same at 30 fps or 144 fps.
+- **Graphics layer is optional.** `game.js` calls into `graphics.js` only if it loaded. If the graphics layer is missing or throws, the game falls back to the plain renderer instead of crashing.
+- **Fault-tolerant frame loop.** Each frame runs inside an error guard, so one bad frame is logged and skipped instead of freezing the game.
+- **Collision with axis-aligned bounding boxes.** World geometry registers AABBs at build time; the player and enemies resolve against them each step.
+- **Instanced rendering** for trees and foliage, which keeps draw calls low on large outdoor maps.
+- **Software rendering fallback** in the desktop app when a PC's graphics driver is blocked.
 
-`graphics.js` is optional. If it is missing or fails to load, `game.js` falls back to the plain renderer, so graphics work can't break the game itself.
+## Controls
+
+| Action      | Keyboard and mouse | Controller   |
+| ----------- | ------------------ | ------------ |
+| Move        | W A S D            | Left stick   |
+| Look        | Mouse              | Right stick  |
+| Fire        | Left click or F    | R2           |
+| Scope       | Right click or Q   | L2           |
+| Jump        | Space              | Cross        |
+| Crouch      | C                  | Circle or R3 |
+| Sprint      | Left Shift         | L3           |
+| Reload      | R                  | Square or R1 |
+| Swap weapon | X                  | Triangle     |
+| Pause       | Esc or P           | Options      |
+
+Every keyboard action can be rebound in **Settings → Controls**.
+
+## Run it locally
+
+In the browser, open `index.html`. No build step or server is needed.
+
+As a desktop app:
+
+```bash
+npm install
+npm start           # run the Electron app from source
+npm run dist:win    # build the installer and portable .exe into dist/
+```
+
+Code style is enforced with Prettier:
+
+```bash
+npm run format        # format all source files
+npm run format:check  # check formatting without changing files
+```
 
 ## Settings
 
-Open **Settings** from the title screen or the pause menu (**Esc** or **P**, **Options** on a controller). Changes save automatically.
+| Tab      | Options                                                                                                                  |
+| -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Display  | Fullscreen, graphics preset, render scale (50 to 100%), field of view (60 to 100°), frame rate counter, frame rate limit |
+| Audio    | Master, effects and ambient volume, mute                                                                                 |
+| Controls | Mouse and controller sensitivity, invert look, key rebinding for 18 actions                                              |
+| Gameplay | Screen shake, crosshair color, reset to defaults                                                                         |
 
-| Tab | Options |
-|---|---|
-| Display | Fullscreen, graphics preset, render scale (50–100%), field of view (60–100°), frame rate counter, frame rate limit (unlimited, 60 or 30 fps) |
-| Audio | Master volume, effects volume, growls and boss drone volume, mute |
-| Controls | Mouse sensitivity, controller look speed, invert look, and rebinding for 18 keyboard actions |
-| Gameplay | Screen shake strength, crosshair color, reset all settings |
+## Roadmap
 
-## Graphics presets
+1. Split `game.js` into ES modules (world, enemies, weapons, audio, UI) with a Vite build.
+2. Add unit tests for the pure logic: seeded generation, collision, scoring.
+3. Ambient occlusion and a water shader for the creek.
+4. Upgrade three.js from r128 to a current release.
+5. glTF character models in place of the primitive-shape rigs.
 
-Players choose a preset in **Settings → Display**.
+## Credits and licenses
 
-| Preset | What it turns on |
-|---|---|
-| Low | Original look, 1024 shadows, no post-processing. For older laptops and phones. |
-| Medium | Surface textures, animated cloudy sky, color grading, FXAA anti-aliasing, 2048 shadows that follow the player, ambient particles |
-| High | Everything in Medium, plus HDR bloom so enemy eyes, lights, coins, lasers and explosions glow, and twice the particles |
+- [three.js](https://threejs.org/) r128, MIT License (`vendor/three/LICENSE`)
+- Lilita One and Nunito fonts, SIL Open Font License (`fonts/`)
 
-Per-level color grades: The Creek is warm and saturated, the Abandoned City is cool and washed out, and the Office Tower is neutral. Boss waves pull every level toward a dark red grade with a heavier vignette.
-
-## Graphics roadmap
-
-Ideas for the next passes, roughly in order of payoff:
-
-1. **Ambient occlusion** with `SAOPass` or `SSAOPass` from `three/examples/js/postprocessing`, to ground objects in contact shadows.
-2. **Real textures** in `assets/textures/`, loaded with `THREE.TextureLoader` in place of the canvas-generated ones in `graphics.js` (`tex()` is the one place to swap).
-3. **Modeled characters** as glTF files in `assets/models/`, loaded with `GLTFLoader`, replacing the box-and-cylinder scout rigs.
-4. **Water shader** for the creek, using `examples/js/objects/Water.js`.
-5. **Upgrade three.js** from r128 to a current release with ES modules and a build tool such as Vite. This is the biggest change: lighting and color management work differently in newer versions, so every material needs retuning.
+Game code and art copyright © 2026 Matthew Lynn. All rights reserved.
