@@ -4,5 +4,5 @@ contextBridge.exposeInMainWorld('GullyApp', {
   quit: () => ipcRenderer.send('quit'),
   setFullscreen: (v) => ipcRenderer.send('set-fullscreen', !!v),
   onFullscreen: (cb) => ipcRenderer.on('fullscreen', (e, v) => cb(!!v)),
-  platform: process.platform
+  platform: process.platform,
 });
