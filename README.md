@@ -2,7 +2,7 @@
 
 A first-person 3D wave shooter built with three.js that runs in any modern browser and ships as a Windows desktop app. Players tag masked scouts across three procedurally laid-out maps, smash destructible cover for power-ups, and upgrade their blaster between waves.
 
-**[Play in the browser](https://hepmatt.github.io/gully-foam-war/)** · **[Download for Windows](https://github.com/hepmatt/gully-foam-war/releases)**
+**[Play in the browser](https://hepmatt.github.io/Gully-Foam-War/)** · **[Download for Windows](https://github.com/hepmatt/Gully-Foam-War/releases)**
 
 ![Character and level select screen](docs/screenshots/title.jpg)
 
