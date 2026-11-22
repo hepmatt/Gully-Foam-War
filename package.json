@@ -10,11 +10,14 @@
   "scripts": {
     "start": "electron .",
     "dist:win": "electron-builder --win nsis portable --publish never",
-    "pack:win": "electron-builder --win dir --publish never"
+    "pack:win": "electron-builder --win dir --publish never",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "electron": "44.7.0",
-    "electron-builder": "26.17.0"
+    "electron-builder": "26.17.0",
+    "prettier": "3.10.1"
   },
   "build": {
     "appId": "com.hepmatt.gullyfoamwar",
@@ -35,7 +38,10 @@
       "buildResources": "build"
     },
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "build/icon.ico"
     },
     "nsis": {
